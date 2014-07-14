@@ -52,6 +52,7 @@ class DefaultConfigTask extends BaseTask
                         $this->logger->info("---> Disable phar.readonly option.");
                         $content = preg_replace('/^phar.readonly\s*=\s*.*/im', "phar.readonly = 0", $content);
                     }
+                    $this->logger->info("---> Updating config file");
                     file_put_contents($targetConfigPath, $content);
                 }
             }
