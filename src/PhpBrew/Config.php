@@ -1,6 +1,5 @@
 <?php
 namespace PhpBrew;
-
 use Exception;
 use Symfony\Component\Yaml\Yaml;
 
@@ -36,6 +35,8 @@ class Config
 
     /**
      * Variants is private, so we use HOME path.
+     *
+     * @return path
      */
     public static function getVariantsDir()
     {
@@ -44,10 +45,22 @@ class Config
 
     /**
      * php(s) could be global, so we use ROOT path.
+     *
+     * @return path
      */
     public static function getBuildDir()
     {
         return self::getPhpbrewRoot() . DIRECTORY_SEPARATOR . 'build';
+    }
+
+
+    /**
+     * Distribution file directory
+     *
+     * @return path 
+     */
+    public static function getDistDir() {
+        return self::getPhpbrewRoot() . DIRECTORY_SEPARATOR . 'dist';
     }
 
     /**
@@ -71,7 +84,7 @@ class Config
     }
 
     /**
-     * XXX: This method should be migrated to PhpBrew\Build class.
+     * DEPRECATED, please use Build->getEtcDirectory instead
      *
      * @param string $version
      *
@@ -82,6 +95,10 @@ class Config
         return self::getVersionBuildPrefix($version) . DIRECTORY_SEPARATOR . 'etc';
     }
 
+
+    /**
+     * DEPRECATED, please use Build->getBinDirectory instead
+     */
     public static function getVersionBinPath($version)
     {
         return self::getVersionBuildPrefix($version) . DIRECTORY_SEPARATOR . 'bin';
