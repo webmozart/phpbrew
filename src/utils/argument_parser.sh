@@ -13,22 +13,26 @@ is_option() {
   return 1
 }
 
+
 parse_arguments() {
   command=''
-  declare -g -A command_arguments=()
+  subcommand=''
+  declare -g -A args=()
 
   #get function agruments
-  local known_arguments=("${!1}")
-  local known_options=("${!2}")
-  local raw_arguments=("${!3}")
+  #local command_arguments=("${!1}")
+  #local command_options=("${!2}")
+  #local raw_arguments=("${!3}")
 
+  local raw_arguments=("${@}")
 
   #get definied options
+  local opt_required=()
   local opt_map opt_type_map
   declare -A opt_map=()
   declare -A opt_type_map=()
 
-  for opt in "${known_options[@]}"; do
+  for opt in "${!command_options[@]}"; do
     local full_opt_name=''
     local opt_names=( $(echo ${opt} | grep -o '[a-z0-9\-]*') )
 
@@ -48,6 +52,8 @@ parse_arguments() {
     if [[ ${opt_type} == "" ]]; then
       echo "Error no option type given for ${full_opt_name}"
       exit 1
+    elif [[ ${opt_type} == ":" ]]; then
+      opt_required+=(${full_opt_name})
     fi
 
     opt_type_map[${full_opt_name}]=${opt_type}
@@ -55,7 +61,9 @@ parse_arguments() {
 
 
   #iterate over the raw argumgents
-  local number_command_arguments=${#known_arguments[@]}
+  local number_commands=${#commands[@]}
+  local number_command_arguments=${#command_arguments[@]}
+  local start_options=$((number_commands + number_command_arguments))
   local no_raw_arguments=${#raw_arguments[@]}
   local arg=''
   local current_arg=''
@@ -65,12 +73,15 @@ parse_arguments() {
   while [[ ${counter} -lt ${no_raw_arguments} ]]; do
     arg=${raw_arguments[${counter}]}
 
-    if [[ ${counter} == 0 ]] && !(is_option ${arg}); then
-      command=${arg}
-    elif [[ ${counter} -le ${number_command_arguments} ]] && !(is_option ${arg}); then
-      req_param_name=${known_arguments[$((counter - 1))]}
-      command_arguments[${req_param_name}]=${arg}
-    elif [[ ${counter} -gt ${number_command_arguments} ]] && is_option ${arg}; then
+    if [[ ${counter} -lt ${number_commands} ]] && !(is_option ${arg}); then
+      if [[ ${arg} != ${commands[$counter]} ]]; then
+        echo "Unknown command ${arg} called"
+        exit 1
+      fi
+    elif [[ ${counter} -lt ${start_options} ]] && [[ ${counter} -ge ${number_commands} ]] && !(is_option ${arg}); then
+      req_param_name=${command_arguments[$((counter - number_commands))]}
+      args[${req_param_name}]=${arg}
+    elif [[ ${counter} -ge ${start_options} ]] && is_option ${arg}; then
       if (key_exists ${arg} opt_map); then
         arg=${opt_map[${arg}]}
       else
@@ -85,11 +96,11 @@ parse_arguments() {
         is_multiple_opt=true
       fi
 
-      if ${is_multiple_opt} && !(key_exists "${current_arg},#" command_arguments); then
-        command_arguments["${current_arg},#"]=0
-      elif !(${is_multiple_opt}) && !(key_exists ${current_arg} command_arguments); then
-        command_arguments[${current_arg}]=''
-      elif (key_exists ${current_arg} command_arguments) && [[ ${is_multiple_opt} ]]; then
+      if ${is_multiple_opt} && !(key_exists "${current_arg},#" args); then
+        args["${current_arg},#"]=0
+      elif !(${is_multiple_opt}) && !(key_exists ${current_arg} args); then
+        args[${current_arg}]=''
+      elif (key_exists ${current_arg} args) && [[ ${is_multiple_opt} ]]; then
         echo "Error ${current_arg} can't be multiple definied"
         exit 1
       fi
@@ -101,11 +112,11 @@ parse_arguments() {
 
         if [[ ${arg} != "" ]] && !(is_option ${arg}); then
           if ${is_multiple_opt}; then
-            local no_opt_args=${command_arguments["${current_arg},#"]}
-            command_arguments["${current_arg},${no_opt_args}"]="${arg}"
-            command_arguments["${current_arg},#"]=$((no_opt_args+1))
+            local no_opt_args=${args["${current_arg},#"]}
+            args["${current_arg},${no_opt_args}"]="${arg}"
+            args["${current_arg},#"]=$((no_opt_args+1))
           else
-            command_arguments[${current_arg}]="${arg}"
+            args[${current_arg}]="${arg}"
           fi
 
           counter=${next}
@@ -115,7 +126,7 @@ parse_arguments() {
       if [[ ${counter} == 0 ]]; then
         echo "invalide command ${arg}"
       elif [[ ${counter} -le ${number_command_arguments} ]]; then
-        req_param_name=${known_arguments[$((counter - 1))]}
+        req_param_name=${command_arguments[$((counter - 1))]}
         echo "missing required parameter ${req_param_name}"
       elif [[ ${counter} -gt ${number_command_arguments} ]]; then
         echo "wrong option ${arg}"
@@ -126,41 +137,55 @@ parse_arguments() {
 
     counter=$((counter + 1))
   done
+
+  #Check for missing required vars
+  for req_opt in "${opt_required[@]}"; do
+    if !(key_exists ${req_opt} args); then
+      echo "Option ${req_opt} is required"
+      exit 1
+    fi
+  done
 }
 
 #test
-command_args=(
-  'name'
-  'version'
+commands=(
+  'com'
+  'subcommand'
+  'subsubcom'
 )
-sub_commands=(
-  ''
-)
-command_ops=(
-  'single-required:'
-  'single-optional?'
-  'single-repeatable+'
-  'r|required-opt:'
-  'o|optional-opt?'
-  'p|repeatable-opt+'
-)
-args=("$@")
 
-parse_arguments command_args[@] command_ops[@] args[@]
+command_arguments=(
+  "version"
+  "name"
+)
 
-echo "--- Command ---"
-echo "${command}"
+declare -g -A command_options=(
+  ["single-required:"]="Desc 1"
+  ["single-optional?"]="Desc 2"
+  ["single-repeatable+"]="Desc 3"
+  ["r|required-opt:"]="Desc 4"
+  ["o|optional-opt?"]="Desc 5"
+  ["p|repeatable-opt+"]="Desc 6"
+)
+
+parse_arguments ${@}
 
 echo "---- Args -----"
 
-for k in "${!command_arguments[@]}"; do
-  echo "${k}: "
-  params=()
-  IFS='|' read -a params <<< "${command_arguments["${k}"]}"
+for key in "${!args[@]}"; do
+  k=$(echo ${key} | grep -o '[a-z0-9\-]*')
 
-  if [ ${#params[@]} -gt 0 ]; then
-    for param in "${params[@]}"; do
-        echo "${param}"
+
+  if [[ $(echo ${key} | grep -o '[\#]*') == "#" ]] && (key_exists "${k},#" args); then
+    echo "|> ${k}"
+
+    i=0
+    while [[ ${i} -lt ${args["${k},#"]} ]] ; do
+      echo "|==> ${args[${k},${i}]}"
+      i=$[$i+1]
     done
+  elif [[ $(echo ${key} | grep -o '[\,]*') == "" ]]; then
+    echo "|> ${k}"
+    echo "|==> ${args[${k}]}"
   fi
 done
